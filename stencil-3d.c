@@ -80,7 +80,7 @@ void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int n
 	// stencil：对两个矩阵进行MAX_TIME的算子计算操作，每次操作后结果存储到B矩阵
 	// args list
 	// A: 被算的矩阵
-	// B: 算好之后村的矩阵
+	// B: 算好之后存的矩阵
 	// nx, ny,nz: 矩阵第一、第二、第三维度大小
 	int i, j, k;
 	// 计算MAX_TIME次，三维空间内部上下左右前后加自身一共7个点的平均，并将一次迭代更新矩阵A, B
