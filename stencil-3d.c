@@ -21,13 +21,14 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 	// sy: 二维空间大小
 	// sz: 三维空间大小
 	// inner temp: 最外圈以内的矩阵，初始化进去数值,如果放在二维，如图
-	''' ######
-		#****#
-		#****#
-		#****#
-		#****#
-		######
-        ''' 
+	''' 
+	######
+	#****#
+	#****#
+	#****#
+	#****#
+	######
+    ''' 
 	for (int i = 1; i < (sx - 1); i++)
 	{
 		for (int j = 1; j < (sy - 1); j++)
@@ -40,13 +41,13 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 	}
 	// 接下来三个循环，是分别对每一个维度的第一片和最后一片进行赋值
 	'''
-		@@@@@@
-		#****#
-		#****#
-		#****#
-		#****#
-		@@@@@@
-        ''' 
+	@@@@@@
+	#****#
+	#****#
+	#****#
+	#****#
+	@@@@@@
+    ''' 
 	for (int j = 0; j < sy; j++)
 	{
 		for (int k = 0; k < sz; k++)
