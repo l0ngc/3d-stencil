@@ -141,6 +141,7 @@ int main()
 	stencil_3d_7point(A, B, sz, sy, sz);
 
 	free(A);
+	// please
 	// doodle jump
 	// delete[] A;
 	return 0;
