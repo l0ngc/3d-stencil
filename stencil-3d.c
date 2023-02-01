@@ -2,7 +2,7 @@
 #include <stdio.h>
 typedef float real_t;
 typedef real_t ***arr_t;
-#define MAX_TIME 10
+#define MAX_TIME 1000
 #define INNER -1.0
 #define OUTER 1.0
 
@@ -77,32 +77,36 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 
 void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int nz)
 {
-	// stencil：对两个矩阵进行MAX_TIME的算子计算操作，每次操作后结果存储到B矩阵
-	// args list
-	// A: 被算的矩阵
-	// B: 算好之后存的矩阵
-	// nx, ny,nz: 矩阵第一、第二、第三维度大小
-	int i, j, k;
-	// 计算MAX_TIME次，三维空间内部上下左右前后加自身一共7个点的平均，并将一次迭代更新矩阵A, B
+	__m128 a, b, c, d, e, f, g;
+
 	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
 	{
-		for (i = 1; i < nx - 1; i++)
-			for (j = 1; j < ny - 1; j++)
-				for (k = 1; k < nz - 1; k++)
-					B[i][j][k] = (A[i - 1][j][k] +
-								  A[i][j - 1][k] +
-								  A[i][j][k - 1] +
-								  A[i][j][k] +
-								  A[i][j][k + 1] +
-								  A[i][j + 1][k] +
-								  A[i + 1][j][k]) /
-								 7.0;
-		for (i = 1; i < nx - 1; i++)
-			for (j = 1; j < ny - 1; j++)
-				for (k = 1; k < nz - 1; k++)
+        for (int k = 1; k < nz - 1; k++)
+            for (int j = 1; j < ny - 1; j++)
+                for (int i = 1; i < nx - 1; i += 4)
+                {
+                    a = _mm_load_ps(&A[i-1][j][k]);
+                    b = _mm_load_ps(&A[i][j-1][k]);
+                    c = _mm_load_ps(&A[i][j][k-1]);
+                    d = _mm_load_ps(&A[i][j][k]);
+                    e = _mm_load_ps(&A[i][j][k+1]);
+                    f = _mm_load_ps(&A[i][j+1][k]);
+                    g = _mm_load_ps(&A[i+1][j][k]);
+
+                    d = _mm_add_ps(a, _mm_add_ps(b, _mm_add_ps(c, _mm_add_ps(d, _mm_add_ps(e, _mm_add_ps(f, g))))));
+                    d = _mm_div_ps(d, _mm_set1_ps(7.0));
+
+                    _mm_store_ps(&B[i][j][k], d);
+                }
+		for (int i = 1; i < nx - 1; i++)
+			for (int j = 1; j < ny - 1; j++)
+				for (int k = 1; k < nz - 1; k++)
 					A[i][j][k] = B[i][j][k];
 	}
 }
+
+
+
 
 int main()
 {
@@ -137,6 +141,7 @@ int main()
 	stencil_3d_7point(A, B, sz, sy, sz);
 
 	free(A);
+	// doodle jump
 	// delete[] A;
 	return 0;
 }
