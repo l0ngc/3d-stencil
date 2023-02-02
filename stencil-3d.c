@@ -6,6 +6,11 @@ typedef real_t ***arr_t;
 #define INNER -1.0
 #define OUTER 1.0
 
+// after we implemented vector, we could use vectorization to optimize this code.
+// two ways: using SVE to generate SVE code autotimatically,
+// hands on the code and apply exact vector instructions
+// 
+// 
 void setElement(float ***array, float value, int x, int y, int z)
 {
 	// 在一个三维数组里面，指定位置里面设置位置
@@ -65,6 +70,7 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 			setElement(array, outer_temp, i, sy - 1, k);
 		}
 	}
+
 	for (int i = 0; i < sx; i++)
 	{
 		for (int j = 0; j < sy; j++)
@@ -77,6 +83,7 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 
 void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int nz)
 {
+	// 这个stencil其实很简单
 	__m128 a, b, c, d, e, f, g;
 
 	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
