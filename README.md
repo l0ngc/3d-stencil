@@ -11,7 +11,7 @@ EDA284的实验项目
 3. Do a design space exploration of future vector architectures by evaluating the trade-offs in performance, area, and energy requirements.
 
 翻译下来，每件事儿就是
-1. 研究一下哥哥感觉cache size的算法表现的影响。
+1. 研究一下各个感觉cache size的算法表现的影响。
 2. 通过一系列算法优化，来观察能达到的性能提升。
 3. 对一个向量结构的优化空间，来找到性能、面积、能源要求的取舍。
 
