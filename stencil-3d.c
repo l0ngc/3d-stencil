@@ -15,7 +15,7 @@ void setElement(float ***array, float value, int x, int y, int z)
 
 void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float outer_temp)
 {
-
+	// 初始化数值部分存在优化空间，但是优化空间较少，主要应该来自于卷积
 	for (int i = 1; i < (sx - 1); i++)
 	{
 		for (int j = 1; j < (sy - 1); j++)
@@ -63,6 +63,9 @@ void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int n
 	// nx, ny,nz: 矩阵第一、第二、第三维度大小
 	int i, j, k;
 	// 计算MAX_TIME次，三维空间内部上下左右前后加自身一共7个点的平均，并将一次迭代更新矩阵A, B
+	// 优化策略，可能性
+	// 1. 使用openmp对这三层for loop循环进行并行
+	// 2. 对该部分代码使用loop tiling，并且在之后tiling过loop再map到vector上
 	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
 	{
 		for (i = 1; i < nx - 1; i++)

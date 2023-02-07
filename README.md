@@ -4,8 +4,7 @@
 EDA284的实验项目
 ## Tasks
 需要使用GEM5 simulator，同时使用ARM SVE的向量化指令（基本是Lab1的实验内容），来实现对现在已经有的serial code来进行向量化编写，来实现最佳性能。
-我们具有以下任务：
-
+## Tasks
 1. Perform a study for cache sizes for your algorithm.
 2. Transform a serial implementation of the problem you have selected using various types of optimizations and report the achieved results.
 3. Do a design space exploration of future vector architectures by evaluating the trade-offs in performance, area, and energy requirements.
@@ -15,8 +14,14 @@ EDA284的实验项目
 2. 通过一系列算法优化，来观察能达到的性能提升。
 3. 对一个向量结构的优化空间，来找到性能、面积、能源要求的取舍。
 
+## 实验方法
+- 使用GEM5进行模拟
+- 使用ARM+SVE进行编译
+- Benchmark使用NEON code（待定，或者使用不vectorized的线性代码）
+
 ## Opt steps
 1. setElement一共需要完成i * j * k次，且函数性能相对简单，因此将setElement函数inline。
+2. loop unrolling:增加数据重用(data reuse)，减少CMP循环判断指令。
 
 ## Roofline
 同事，我们需要使用roofline模型，来对模型进行衡量。
