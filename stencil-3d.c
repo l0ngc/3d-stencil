@@ -6,6 +6,7 @@ typedef real_t ***arr_t;
 #define INNER -1.0
 #define OUTER 1.0
 
+inline
 void setElement(float ***array, float value, int x, int y, int z)
 {
 	// 在一个三维数组里面，指定位置里面设置位置
@@ -14,21 +15,7 @@ void setElement(float ***array, float value, int x, int y, int z)
 
 void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float outer_temp)
 {
-	// 初始化数值，对一个3维空间表层赋值为outer_temp，对内层设置为inner_temp
-	// arg explains
-	// array: 提前分配好的三维空间
-	// sx: 一维空间的大小
-	// sy: 二维空间大小
-	// sz: 三维空间大小
-	// inner temp: 最外圈以内的矩阵，初始化进去数值,如果放在二维，如图
-
-	// ######
-	// #****#
-	// #****#
-	// #****#
-	// #****#
-	// ######
-
+	// 初始化数值部分存在优化空间，但是优化空间较少，主要应该来自于卷积
 	for (int i = 1; i < (sx - 1); i++)
 	{
 		for (int j = 1; j < (sy - 1); j++)
@@ -39,14 +26,6 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 			}
 		}
 	}
-	// 接下来三个循环，是分别对每一个维度的第一片和最后一片进行赋值
-	
-	// @@@@@@
-	// #****#
-	// #****#
-	// #****#
-	// #****#
-	// @@@@@@
 
 	for (int j = 0; j < sy; j++)
 	{
@@ -56,7 +35,7 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 			setElement(array, outer_temp, sx - 1, j, k);
 		}
 	}
-	//
+
 	for (int i = 0; i < sx; i++)
 	{
 		for (int k = 0; k < sz; k++)
@@ -84,6 +63,9 @@ void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int n
 	// nx, ny,nz: 矩阵第一、第二、第三维度大小
 	int i, j, k;
 	// 计算MAX_TIME次，三维空间内部上下左右前后加自身一共7个点的平均，并将一次迭代更新矩阵A, B
+	// 优化策略，可能性
+	// 1. 使用openmp对这三层for loop循环进行并行
+	// 2. 对该部分代码使用loop tiling，并且在之后tiling过loop再map到vector上
 	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
 	{
 		for (i = 1; i < nx - 1; i++)
