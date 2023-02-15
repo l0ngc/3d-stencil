@@ -1,15 +1,31 @@
+#!/bin/bash
+# CXX=aarch64-linux-gnu-g++
+# CXX=g++
 CXX=aarch64-linux-gnu-gcc
-all: stencil stencil_op
+all: stencil-3d stencil-3d_op
 
-stencil: stencil-3d.c
-	${CXX} -O3 -fopenmp -march=armv8-a+sve stencil-3d.c -o stencil
+IDIR=include
+CXXFLAGS=-I$(IDIR) -O3
 
-stencil_op: stencil-3d.c
-	${CXX} -O3 -fopenmp -march=armv8-a+sve stencil-3d_op.c -o stencil_op
+ODIR=src
+LDIR =../lib
 
-run_all: run run_op
+LIBS=-lm -static
+
+stencil-3d.o:
+	$(CXX) -c -o $@ stencil-3d.c ${CXXFLAGS} 
+
+stencil-3d: stencil-3d.o
+	$(CXX) -o $@ $^ $(LIBS)
+
+stencil-3d_op.o:
+	$(CXX) -march=armv8-a+sve -c -o $@ stencil-3d.c ${CXXFLAGS} 
+
+stencil-3d_op: stencil-3d_op.o
+	$(CXX) -march=armv8-a+sve -o $@ $^ $(LIBS)
+
 
 default: all
 
 clean:
-	rm -f stencil_op stencil
+	rm -f stencil-3d.o stencil-3d stencil-3d_op.o stencil-3d_op
