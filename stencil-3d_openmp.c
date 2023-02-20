@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <arm_sve.h>
+#include <omp.h>
 typedef float real_t;
 typedef real_t ***arr_t;
 #define MAX_TIME 10
