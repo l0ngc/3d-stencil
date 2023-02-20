@@ -1,22 +1,20 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <omp.h>
+#include <arm_sve.h>
 typedef float real_t;
 typedef real_t ***arr_t;
-#define MAX_TIME 2
+#define MAX_TIME 10
 #define INNER -1.0
 #define OUTER 1.0
+#define BLOCK_SIZE 256
 
-inline
 void setElement(float ***array, float value, int x, int y, int z)
 {
-	// 在一个三维数组里面，指定位置里面设置位置
 	array[x][y][z] = value;
 }
 
 void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float outer_temp)
 {
-	#pragma omp parallel for shared(array, sx, sy, sz, inner_temp)
 	for (int i = 1; i < (sx - 1); i++)
 	{
 		for (int j = 1; j < (sy - 1); j++)
@@ -28,7 +26,6 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 		}
 	}
 
-	#pragma omp parallel for shared(array, sx, sy, sz, outer_temp)
 	for (int j = 0; j < sy; j++)
 	{
 		for (int k = 0; k < sz; k++)
@@ -38,7 +35,6 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 		}
 	}
 
-	#pragma omp parallel for shared(array, sx, sy, sz, outer_temp)
 	for (int i = 0; i < sx; i++)
 	{
 		for (int k = 0; k < sz; k++)
@@ -47,8 +43,7 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 			setElement(array, outer_temp, i, sy - 1, k);
 		}
 	}
-	
-	#pragma omp parallel for shared(array, sx, sy, sz, outer_temp)
+
 	for (int i = 0; i < sx; i++)
 	{
 		for (int j = 0; j < sy; j++)
@@ -59,14 +54,183 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 	}
 }
 
+#if defined(FUSE)
 void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int nz)
 {
+	int i, j, k;
+	svfloat32_t vec_A, vec_Result, vec_Seven, tmp_vec;
+	vec_Seven = svdup_n_f32(7.0);
+	svbool_t pg = svwhilelt_b32(0, nz - 2);
+	float **tmp = (float **)malloc(ny * sizeof(float *));
+	for (i = 0; i < ny; i++)
+	{
+		tmp[i] = (float *)malloc(nz * sizeof(float));
+	}
 
+	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
+	{
+		for (i = 1; i < nx - 1; i++)
+		{
+			for (j = 1; j < ny - 1; j++)
+			{
+				for (k = 1; k < nz - 1; k += svcntw())
+				{
+					// load A[i-1][j][k], A[i][j-1][k], and A[i][j][k-1] vectors
+					vec_A = svld1(pg, &A[i - 1][j][k]);
+					vec_Result = svld1(pg, &A[i][j - 1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j][k - 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k] vector
+					vec_A = svld1(pg, &A[i][j][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k+1], A[i][j+1][k], and A[i+1][j][k] vectors
+					vec_A = svld1(pg, &A[i][j][k + 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j + 1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i + 1][j][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// divide the result by 7
+					vec_Result = svdiv_f32_m(pg, vec_Result, vec_Seven);
+					// store the result to B[i][j][k]
+					if (i != 1)
+					{ 
+						
+						tmp_vec = svld1(pg, &tmp[j][k]);
+						svst1(pg, &A[i-1][j][k], tmp_vec);
+					}
+					svst1(pg, &tmp[j][k], vec_Result);
+				}
+			}
+		}
+		for (j = 1; j < ny - 1; j++)
+		{
+			for (k = 1; k < nz - 1; k++)
+			{
+				A[nx - 1][j][k] = tmp[j][k];
+			}
+		}
+	}
+}
+#elif defined(UNROLL)
+void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int nz)
+{
+	// unroll j 2
+	int i, j, k;
+	svfloat32_t vec_A, vec_Result, vec_Seven;
+	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
+	{
+		for (i = 1; i < nx - 1; i++)
+		{
+			for (j = 1; j < ny - 1; j += 2)
+			{
+				svbool_t pg = svwhilelt_b32(0, nz - 2);
+				for (k = 1; k < nz - 1; k += svcntw())
+				{
+					// load A[i-1][j][k], A[i][j-1][k], and A[i][j][k-1] vectors
+					vec_A = svld1(pg, &A[i - 1][j][k]);
+					vec_Result = svld1(pg, &A[i][j - 1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j][k - 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k] vector
+					vec_A = svld1(pg, &A[i][j][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k+1], A[i][j+1][k], and A[i+1][j][k] vectors
+					vec_A = svld1(pg, &A[i][j][k + 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j + 1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i + 1][j][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// divide the result by 7
+					vec_Result = svdiv_f32_m(pg, vec_Result, vec_Seven);
+					// store the result to B[i][j][k]
+					svst1(pg, &B[i][j][k], vec_Result);
+
+					// load A[i-1][j][k], A[i][j-1][k], and A[i][j][k-1] vectors
+					vec_A = svld1(pg, &A[i - 1][j+1][k]);
+					vec_Result = svld1(pg, &A[i][j - 1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j+1][k - 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k] vector
+					vec_A = svld1(pg, &A[i][j+1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k+1], A[i][j+1][k], and A[i+1][j][k] vectors
+					vec_A = svld1(pg, &A[i][j+1][k + 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j + 2][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i + 1][j+2][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// divide the result by 7
+					vec_Result = svdiv_f32_m(pg, vec_Result, vec_Seven);
+					// store the result to B[i][j][k]
+					svst1(pg, &B[i][j+1][k], vec_Result);
+				}
+			}
+		}
+			for (i = 1; i < nx - 1; i++)
+				for (j = 1; j < ny - 1; j++)
+					for (k = 1; k < nz - 1; k++)
+						A[i][j][k] = B[i][j][k];
+	}
+}
+#elif defined(MANUL)
+void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int nz)
+{
+	int i, j, k;
+	svfloat32_t vec_A, vec_Result, vec_Seven;
+	vec_Seven = svdup_n_f32(7.0);
+	svbool_t pg = svwhilelt_b32(0, nz - 2);
+	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
+	{
+
+		for (i = 1; i < nx - 1; i++)
+		{
+			for (j = 1; j < ny - 1; j += 1)
+			{
+				for (k = 1; k < nz - 1; k += svcntw())
+				{
+					// load A[i-1][j][k], A[i][j-1][k], and A[i][j][k-1] vectors
+					vec_A = svld1(pg, &A[i - 1][j][k]);
+					vec_Result = svld1(pg, &A[i][j - 1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j][k - 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k] vector
+					vec_A = svld1(pg, &A[i][j][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k+1], A[i][j+1][k], and A[i+1][j][k] vectors
+					vec_A = svld1(pg, &A[i][j][k + 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j + 1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i + 1][j][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// divide the result by 7
+					vec_Result = svdiv_f32_m(pg, vec_Result, vec_Seven);
+					// store the result to B[i][j][k]
+					svst1(pg, &B[i][j][k], vec_Result);
+				}
+			}
+		}
+		for (i = 1; i < nx - 1; i++)
+			for (j = 1; j < ny - 1; j++)
+				for (k = 1; k < nz - 1; k++)
+					A[i][j][k] = B[i][j][k];
+	}
+}
+
+#else
+void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int nz)
+{
 	int i, j, k;
 
 	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
-	{	
-		#pragma omp parallel for
+	{
 		for (i = 1; i < nx - 1; i++)
 			for (j = 1; j < ny - 1; j++)
 				for (k = 1; k < nz - 1; k++)
@@ -78,27 +242,22 @@ void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int n
 								  A[i][j + 1][k] +
 								  A[i + 1][j][k]) /
 								 7.0;
-		#pragma omp parallel for
 		for (i = 1; i < nx - 1; i++)
 			for (j = 1; j < ny - 1; j++)
 				for (k = 1; k < nz - 1; k++)
 					A[i][j][k] = B[i][j][k];
 	}
 }
+#endif
 
 int main()
 {
-	printf("Running parallel stencil, threads = 4......................................\n");
-	double start = omp_get_wtime();
 	int i, j, k;
-	int sz = 1500;
-	int sx = 1500;
-	int sy = 1500;
-	// 为三维数组A分配内存空间
+	int size = 64;
+	int sz = size;
+	int sx = size;
+	int sy = size;
 	float ***A = (float ***)malloc(sx * sizeof(float **));
-
-	double ts = omp_get_wtime();
-	#pragma omp parallel for shared(A)
 	for (i = 0; i < sy; i++)
 	{
 		A[i] = (float **)malloc(sy * sizeof(float *));
@@ -107,9 +266,7 @@ int main()
 			A[i][j] = (float *)malloc(sz * sizeof(float));
 		}
 	}
-	// 为三维数组A分配内存空间
 	float ***B = (float ***)malloc(sx * sizeof(float **));
-	#pragma omp parallel for shared(B)
 	for (i = 0; i < sy; i++)
 	{
 		B[i] = (float **)malloc(sy * sizeof(float *));
@@ -118,31 +275,12 @@ int main()
 			B[i][j] = (float *)malloc(sz * sizeof(float));
 		}
 	}
-	double tf = omp_get_wtime();
-	
-	printf("Time allocating: %.4lfs\n", tf - ts);
-  	
 	// initialize the A matrix
-	ts = omp_get_wtime();
 
 	initValues(A, sx, sy, sz, INNER, OUTER);
-	
-	tf = omp_get_wtime();
-	printf("Time initiating: %.4lfs\n", tf - ts);
-
-	
-	
-  	ts = omp_get_wtime();
 
 	stencil_3d_7point(A, B, sz, sy, sz);
-
-	tf = omp_get_wtime();
-	
-  	printf("Time stencil: %.4lfs\n", tf - ts);
 	free(A);
-	double end = omp_get_wtime();
-	printf("Overall Time : %.4lfs\n", end - start);
-
 	// delete[] A;
 	return 0;
 }

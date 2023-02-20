@@ -1,10 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <arm_sve.h>
 typedef float real_t;
 typedef real_t ***arr_t;
 #define MAX_TIME 10
 #define INNER -1.0
 #define OUTER 1.0
+#define BLOCK_SIZE 256
 
 void setElement(float ***array, float value, int x, int y, int z)
 {
@@ -55,20 +57,42 @@ void initValues(float ***array, int sx, int sy, int sz, float inner_temp, float 
 void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int nz)
 {
 	int i, j, k;
-
+	svfloat32_t vec_A, vec_Result, vec_Seven;
+	vec_Seven = svdup_n_f32(7.0);
+	svbool_t pg = svwhilelt_b32(0, nz - 2);
 	for (int timestep = 0; timestep < MAX_TIME; ++timestep)
 	{
+
 		for (i = 1; i < nx - 1; i++)
-			for (j = 1; j < ny - 1; j++)
-				for (k = 1; k < nz - 1; k++)
-					B[i][j][k] = (A[i - 1][j][k] +
-								  A[i][j - 1][k] +
-								  A[i][j][k - 1] +
-								  A[i][j][k] +
-								  A[i][j][k + 1] +
-								  A[i][j + 1][k] +
-								  A[i + 1][j][k]) /
-								 7.0;
+		{
+			for (j = 1; j < ny - 1; j += 1)
+			{
+				for (k = 1; k < nz - 1; k += svcntw())
+				{
+					// load A[i-1][j][k], A[i][j-1][k], and A[i][j][k-1] vectors
+					vec_A = svld1(pg, &A[i - 1][j][k]);
+					vec_Result = svld1(pg, &A[i][j - 1][k]);
+					// keep adding on
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j][k - 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k] vector
+					vec_A = svld1(pg, &A[i][j][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// load A[i][j][k+1], A[i][j+1][k], and A[i+1][j][k] vectors
+					vec_A = svld1(pg, &A[i][j][k + 1]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i][j + 1][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					vec_A = svld1(pg, &A[i + 1][j][k]);
+					vec_Result = svadd_f32_m(pg, vec_A, vec_Result);
+					// divide the result by 7
+					vec_Result = svdiv_f32_m(pg, vec_Result, vec_Seven);
+					// store the result to B[i][j][k]
+					svst1(pg, &B[i][j][k], vec_Result);
+				}
+			}
+		}
 		for (i = 1; i < nx - 1; i++)
 			for (j = 1; j < ny - 1; j++)
 				for (k = 1; k < nz - 1; k++)
@@ -76,10 +100,11 @@ void stencil_3d_7point(arr_t A, arr_t B, const int nx, const int ny, const int n
 	}
 }
 
+
 int main()
 {
 	int i, j, k;
-	int size = 16;
+	int size = 64;
 	int sz = size;
 	int sx = size;
 	int sy = size;
