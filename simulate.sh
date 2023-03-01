@@ -42,5 +42,14 @@ $GEM5_PATH/build/ARM/gem5.opt -d $dir \
     --param 'system.cpu[:].isa[:].sve_vl_se = 16' \
     --cpu-type=ex5_big --caches --l2cache --l1d_size=$l1d_size --l2_size=$l2_size \
     --sys-clock="2GHz" --cpu-clock="2GHz" --mem-type='DDR3_1600_8x8' -c $stencil_addr
+// OpenMP V
+$GEM5_PATH/build/ARM/gem5.opt -d $dir \
+    $GEM5_PATH/configs/example/se.py \
+    --interp-dir /usr/aarch64-linux-gnu \
+    --redirects /lib=/usr/aarch64-linux-gnu/lib \
+    --param 'system.cpu[:].isa[:].sve_vl_se = 16' \
+    --cpu-type=ex5_big --caches --l2cache --l1d_size=$l1d_size --l2_size=$l2_size \
+    --sys-clock="2GHz" --cpu-clock="2GHz" --mem-type='DDR3_1600_8x8' \
+    --num-cpus=4 -c $stencil_addr
 
 # make clean;make;bash simulate.sh
